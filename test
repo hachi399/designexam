@@ -1,0 +1,52 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wordbook Example</title>
+</head>
+<body>
+
+  <h1>Wordbook Example</h1>
+  
+  <p>Enter Japanese and English word pairs:</p>
+  
+  <textarea id="inputText" rows="4" cols="50"></textarea>
+  
+  <button onclick="createWordbook()">Create Wordbook</button>
+  
+  <h2>Wordbook:</h2>
+  
+  <div id="wordbook"></div>
+
+  <script>
+    function createWordbook() {
+      const inputText = document.getElementById('inputText').value;
+      const pairs = parseInput(inputText);
+      const wordbookDiv = document.getElementById('wordbook');
+      wordbookDiv.innerHTML = ''; // Clear previous wordbook
+      
+      pairs.forEach(pair => {
+        const pairDiv = document.createElement('div');
+        pairDiv.textContent = pair.japanese + ' - ' + pair.english;
+        wordbookDiv.appendChild(pairDiv);
+      });
+    }
+
+    function parseInput(inputText) {
+      const lines = inputText.split('\n');
+      const pairs = [];
+
+      lines.forEach(line => {
+        const words = line.trim().split(/\s+/);
+        if (words.length === 2) {
+          pairs.push({ japanese: words[0], english: words[1] });
+        }
+      });
+
+      return pairs;
+    }
+  </script>
+
+</body>
+</html>
