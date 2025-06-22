@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>カウンター</title>
+</head>
+<body>
+    <h1 id="counter">0</h1>
+    <form id="Myform">
+        <label for="userInput3">現在のドロップ率</label>
+        <input type="text" id="userInput" name="userInput">
+        <button type="button" onclick="useCounterValue()">Submit</button>
+    </form>
+    <button type="button" onclick="incrementCounter()">増やす</button>
+    <div id="result"></div>
+
+    <script>
+        var counterValue = 0;
+
+        function updateCounter() {
+            document.getElementById("counter").textContent = counterValue;
+        }
+
+        function incrementCounter() {
+            counterValue++;
+            updateCounter();
+            useCounterValue();
+        }
+
+        function useCounterValue() {
+            var userInput = document.getElementById("userInput").value;
+            var result = userInput * 1.1 ** counterValue;
+
+            // 結果を新しい要素として作成して表示
+            var resultDiv = document.getElementById("result");
+            var resultMessage = document.createElement("p");
+            resultMessage.textContent = "計算結果: " + result;
+            resultDiv.innerHTML = ""; // 既存の結果をクリア
+            resultDiv.appendChild(resultMessage);
+
+            // 使ったクッキーの総数を表示
+            var sumCookie = (2 ** counterValue) - 1;
+            var sumCookieMessage = document.createElement("p");
+            sumCookieMessage.textContent = "使ったクッキー総数: " + sumCookie;
+            resultDiv.appendChild(sumCookieMessage);
+        }
+    </script>
+</body>
+</html>
