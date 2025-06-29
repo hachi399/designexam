@@ -1,4 +1,4 @@
-const ws = new WebSocket('https://designexam.onrender.com'); // Renderで発行されたURLに変更！
+const ws = new WebSocket('wss://designexam.onrender.com'); // Renderで発行されたURLに変更！
 
 const chatBox = document.getElementById('chat-box');
 const input = document.getElementById('chat-input');
