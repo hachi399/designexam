@@ -9,11 +9,17 @@ wss.on('connection', (ws) => {
   console.log('クライアントが接続しました')
   ws.on('message', message => {
   const text = message.toString(); // Buffer → string に変換
-  server.clients.forEach(client => {
-    if (client.readyState === WebSocket.OPEN) {
-      client.send(text); // 明示的に文字列を送信
-    }
+  server.on('connection', ws => {
+  ws.on('message', message => {
+    const text = message.toString(); // 念のため文字列化
+    server.clients.forEach(client => {
+      if (client.readyState === WebSocket.OPEN) {
+        client.send(text);  // 自分自身にも送信する
+      }
+    });
   });
+});
+
 });
 
 
