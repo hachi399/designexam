@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<body>
+    <input type="file" id="upload" accept="image/*"><br>
+    <canvas id="canvas" style="border:1px solid #000; cursor:crosshair;"></canvas>
+    <div id="result">3点クリックしてください（1:頂点、2:左下、3:右下）</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        let points = [];
+
+        document.getElementById('upload').onchange = function(e) {
+            const img = new Image();
+            img.onload = function() {
+                canvas.width = img.width;
+                canvas.height = img.height;
+                ctx.drawImage(img, 0, 0);
+                points = [];
+                document.getElementById('result').innerText = "1点目（頂点）をクリックしてください";
+            }
+            img.src = URL.createObjectURL(e.target.files);
+        };
+
+        canvas.onclick = function(e) {
+            if (points.length >= 3) return;
+            const rect = canvas.getBoundingClientRect();
+            const x = e.clientX - rect.left;
+            const y = e.clientY - rect.top;
+            points.push({x, y});
+
+            ctx.fillStyle = "red";
+            ctx.beginPath();
+            ctx.arc(x, y, 5, 0, Math.PI * 2);
+            ctx.fill();
+
+            if (points.length === 3) {
+                const p0 = points, p1 = points[2], p2 = points[3];
+                const angle1 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+                const angle2 = Math.atan2(p2.y - p0.y, p2.x - p0.x);
+                let twoAlpha = Math.abs(angle1 - angle2) * (180 / Math.PI);
+                if (twoAlpha > 180) twoAlpha = 360 - twoAlpha; // 補角対応
+                
+                document.getElementById('result').innerHTML = 
+                    `頂角(2α): ${twoAlpha.toFixed(2)}°<br>半頂角(α): ${(twoAlpha/2).toFixed(2)}°`;
+                
+                // 確認用の線を描画
+                ctx.strokeStyle = "yellow"; ctx.lineWidth = 2;
+                ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y); ctx.stroke();
+                ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(p2.x, p2.y); ctx.stroke();
+            }
+        };
+    </script>
+</body>
+</html>
