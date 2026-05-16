@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>【手動3点クリック】大量画像 角度・面積一括計測システム</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-gray-50 min-h-screen text-gray-800">
+
+    <div class="w-full max-w-[1600px] mx-auto p-4 flex flex-col h-screen">
+        <header class="flex justify-between items-center border-b pb-3 mb-3 shrink-0">
+            <div>
+                <h1 class="text-xl font-bold text-gray-900">角度・面積 一括手動計測システム</h1>
+                <p class="text-xs text-gray-500">画像上を「①頂点 ➔ ②左下 ➔ ③右下」の順に3点クリックするだけで、角度と面積を即座にエクセル形式で出力します。</p>
+            </div>
+            <div class="text-right">
+                <div class="text-xs font-semibold text-gray-600 mb-1">全体の進捗: <span id="progressText">0 / 0</span></div>
+                <div class="w-48 bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 gap-4 overflow-hidden min-h-0">
+            
+            <div class="w-72 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col shrink-0 overflow-hidden">
+                <div class="p-3 border-b bg-gray-50 space-y-3">
+                    <div>
+                        <label class="block text-xs font-bold text-gray-700 mb-1">① 画像の一括読み込み</label>
+                        <input type="file" id="upload" accept="image/*" multiple 
+                            class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
+                    </div>
+                </div>
+                <div class="flex-1 overflow-y-auto p-2 space-y-1 bg-gray-50" id="fileList">
+                    <div class="text-xs text-gray-400 text-center p-4">画像が読み込まれていません</div>
+                </div>
+            </div>
+
+            <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden relative" id="dropZone">
+                <div id="status" class="p-2.5 bg-blue-600 text-white font-medium text-sm text-center shrink-0 shadow-sm">
+                    画像を読み込み、キャンバス上を3点クリックしてください。
+                </div>
+
+                <div class="flex-1 overflow-auto flex justify-center items-center bg-gray-100 p-4 min-h-0 relative">
+                    <canvas id="canvas" class="max-w-full h-auto border border-gray-300 rounded shadow-md hidden cursor-crosshair"></canvas>
+                    <div id="placeholder" class="text-gray-400 flex flex-col items-center justify-center pointer-events-none">
+                        <svg class="w-16 h-16 mb-2 stroke-current" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
+                        <span class="text-sm font-semibold">画像ファイルをここにドロップ</span>
+                    </div>
+                </div>
+
+                <div class="p-2 border-t bg-gray-50 flex justify-between items-center shrink-0">
+                    <span id="clickGuide" class="text-[11px] text-red-600 font-bold">画像を読み込んでください。</span>
+                    <div class="flex gap-2">
+                        <button id="prevBtn" class="bg-white border hover:bg-gray-100 text-gray-700 text-xs font-semibold py-1.5 px-3 rounded transition">◀ 前へ</button>
+                        <button id="nextBtn" class="bg-white border hover:bg-gray-100 text-gray-700 text-xs font-semibold py-1.5 px-3 rounded transition">次へ ▶</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-96 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col shrink-0 overflow-hidden">
+                <div class="p-3 border-b bg-gray-50 flex justify-between items-center">
+                    <span class="text-xs font-bold text-gray-700">② 計測データ出力 (Excel直貼用)</span>
+                    <button id="copyBtn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition">
+                        エクセル用コピー
+                    </button>
+                </div>
+                <div class="flex-1 overflow-auto">
+                    <table class="w-full text-left border-collapse text-xs">
+                        <thead class="bg-gray-100 sticky top-0 border-b z-10">
+                            <tr>
+                                <th class="p-2 border-r text-center w-12 text-gray-600">No.</th>
+                                <th class="p-2 border-r text-gray-600">ファイル名</th>
+                                <th class="p-2 border-r text-right text-gray-600">頂角(2α)</th>
+                                <th class="p-2 border-r text-right text-gray-600">半頂角(α)</th>
+                                <th class="p-2 text-right text-gray-600">面積[px²]</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y text-gray-700"></tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-gray-900 text-white text-sm py-2 px-4 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-50">
+        コピーしました！Excelにそのまま貼り付けられます。
+    </div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const upload = document.getElementById('upload');
+        const dropZone = document.getElementById('dropZone');
+        const fileListContainer = document.getElementById('fileList');
+        const tableBody = document.getElementById('tableBody');
+        const status = document.getElementById('status');
+        const placeholder = document.getElementById('placeholder');
+        const prevBtn = document.getElementById('prevBtn');
+        const nextBtn = document.getElementById('nextBtn');
+        const copyBtn = document.getElementById('copyBtn');
+        const progressBar = document.getElementById('progressBar');
+        const progressText = document.getElementById('progressText');
+        const toast = document.getElementById('toast');
+        const clickGuide = document.getElementById('clickGuide');
+
+        let filesData = []; 
+        let currentIndex = -1;
+        let loadedImage = null;
+
+        dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-blue-50'); });
+        dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('bg-blue-50'); });
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault(); dropZone.classList.remove('bg-blue-50');
+            if (e.dataTransfer.files.length > 0) handleFiles(e.dataTransfer.files);
+        });
+
+        upload.onchange = function(e) {
+            if (e.target.files.length > 0) handleFiles(e.target.files);
+        };
+
+        function handleFiles(files) {
+            filesData = [];
+            const targetFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
+
+            if (targetFiles.length === 0) return;
+
+            targetFiles.forEach((file, index) => {
+                const dataStructure = {
+                    index: index,
+                    file: file,
+                    name: file.name,
+                    points: [],
+                    twoAlpha: null,
+                    alpha: null,
+                    area: null, // 面積の保持用
+                    status: '未計測'
+                };
+                filesData.push(dataStructure);
+            });
+
+            currentIndex = 0;
+            displayCurrent();
+            renderFileList();
+            renderTable();
+            updateProgress();
+        }
+
+        function displayCurrent() {
+            if (currentIndex < 0 || currentIndex >= filesData.length) return;
+            const currentData = filesData[currentIndex];
+            
+            const img = new Image();
+            img.onload = function() {
+                loadedImage = img;
+                canvas.width = img.width;
+                canvas.height = img.height;
+                canvas.classList.remove('hidden');
+                placeholder.classList.add('hidden');
+                
+                document.querySelectorAll('.file-item').forEach((el, i) => {
+                    if(i === currentIndex) el.classList.add('bg-blue-100', 'border-blue-300');
+                    else el.classList.remove('bg-blue-100', 'border-blue-300');
+                });
+
+                status.innerText = `【現在選択中】 ${currentData.name}`;
+                updateGuide();
+                redraw();
+                updateProgress();
+            };
+            img.src = URL.createObjectURL(currentData.file);
+        }
+
+        function updateGuide() {
+            if (currentIndex === -1) return;
+            const data = filesData[currentIndex];
+            if (data.points.length === 0) {
+                clickGuide.innerText = "➔ 【1点目】 頂点 をクリックしてください";
+                clickGuide.className = "text-[11px] text-blue-600 font-bold";
+            } else if (data.points.length === 1) {
+                clickGuide.innerText = "➔ 【2点目】 左下 をクリックしてください";
+                clickGuide.className = "text-[11px] text-orange-600 font-bold";
+            } else if (data.points.length === 2) {
+                clickGuide.innerText = "➔ 【3点目】 右下 をクリックしてください";
+                clickGuide.className = "text-[11px] text-red-600 font-bold";
+            } else {
+                clickGuide.innerText = "✓ 計測完了 （クリックで再度最初から打ち直せます）";
+                clickGuide.className = "text-[11px] text-green-600 font-bold";
+            }
+        }
+
+        // 角度と面積の計算ロジック
+        function calculateMeasurements(data) {
+            if (data.points.length !== 3) return;
+            const p0 = data.points[0]; // 頂点
+            const p1 = data.points[1]; // 左下
+            const p2 = data.points[2]; // 右下
+
+            // 1. 角度の計算
+            const angle1 = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+            const angle2 = Math.atan2(p2.y - p0.y, p2.x - p0.x);
+            let twoAlpha = Math.abs(angle1 - angle2) * (180 / Math.PI);
+            if (twoAlpha > 180) twoAlpha = 360 - twoAlpha;
+
+            data.twoAlpha = twoAlpha.toFixed(2);
+            data.alpha = (twoAlpha / 2).toFixed(2);
+
+            // 2. 面積の計算（サラスの公式）
+            // 頂点(p0)を基準(0,0)としたときの相対座標を計算
+            const x1 = p1.x - p0.x;
+            const y1 = p1.y - p0.y;
+            const x2 = p2.x - p0.x;
+            const y2 = p2.y - p0.y;
+            
+            // 外積を用いて面積を算出
+            const area = Math.abs(x1 * y2 - x2 * y1) / 2;
+            data.area = area.toFixed(1); // 小数点第1位まで表示
+
+            data.status = '計測完了';
+        }
+
+        function updateProgress() {
+            const completedCount = filesData.filter(f => f.status === '計測完了').length;
+            const totalCount = filesData.length;
+            progressText.innerText = `${completedCount} / ${totalCount}`;
+            progressBar.style.width = totalCount > 0 ? `${(completedCount / totalCount) * 100}%` : '0%';
+        }
+
+        function redraw() {
+            if (!loadedImage) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(loadedImage, 0, 0);
+
+            const data = filesData[currentIndex];
+            const labels = ["頂点", "左下", "右下"];
+            const colors = ["#3B82F6", "#F97316", "#EF4444"];
+
+            data.points.forEach((pt, idx) => {
+                ctx.fillStyle = colors[idx];
+                ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2); ctx.fill();
+                ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
+
+                ctx.fillStyle = "black"; ctx.font = "bold 16px sans-serif";
+                ctx.shadowColor = "white"; ctx.shadowBlur = 4;
+                ctx.fillText(`${idx + 1}:${labels[idx]}`, pt.x + 10, pt.y - 10);
+                ctx.shadowBlur = 0;
+            });
+
+            // 線の描画と三角形の塗りつぶし
+            if (data.points.length >= 2) {
+                ctx.strokeStyle = "#F59E0B"; ctx.lineWidth = 3; ctx.setLineDash([4, 4]);
+                ctx.beginPath(); 
+                ctx.moveTo(data.points[0].x, data.points[0].y); 
+                ctx.lineTo(data.points[1].x, data.points[1].y); 
+                ctx.stroke();
+            }
+            if (data.points.length === 3) {
+                ctx.beginPath(); 
+                ctx.moveTo(data.points[0].x, data.points[0].y); 
+                ctx.lineTo(data.points[2].x, data.points[2].y); 
+                ctx.stroke();
+                
+                // 3つの点を結ぶ最後の線を引く
+                ctx.beginPath();
+                ctx.moveTo(data.points[1].x, data.points[1].y);
+                ctx.lineTo(data.points[2].x, data.points[2].y);
+                ctx.stroke();
+
+                // 視覚的に面積がわかりやすいよう、薄いオレンジで中を塗りつぶす
+                ctx.fillStyle = "rgba(245, 158, 11, 0.15)";
+                ctx.beginPath();
+                ctx.moveTo(data.points[0].x, data.points[0].y);
+                ctx.lineTo(data.points[1].x, data.points[1].y);
+                ctx.lineTo(data.points[2].x, data.points[2].y);
+                ctx.closePath();
+                ctx.fill();
+            }
+            ctx.setLineDash([]);
+        }
+
+        canvas.onclick = function(e) {
+            if (!loadedImage || currentIndex === -1) return;
+            const data = filesData[currentIndex];
+
+            if (data.points.length >= 3) {
+                data.points = [];
+                data.twoAlpha = null;
+                data.alpha = null;
+                data.area = null;
+                data.status = '未計測';
+            }
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            const x = (e.clientX - rect.left) * scaleX;
+            const y = (e.clientY - rect.top) * scaleY;
+
+            data.points.push({x, y});
+            
+            if (data.points.length === 3) {
+                calculateMeasurements(data);
+                renderTable();
+                renderFileList();
+                updateProgress();
+            }
+
+            updateGuide();
+            redraw();
+        };
+
+        function renderFileList() {
+            fileListContainer.innerHTML = '';
+            filesData.forEach((data, idx) => {
+                const div = document.createElement('div');
+                div.className = `file-item p-2 text-xs border rounded cursor-pointer transition flex justify-between items-center bg-white ${idx === currentIndex ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'}`;
+                
+                let badge = `<span class="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">未計測</span>`;
+                if(data.status === '計測完了') {
+                    badge = `<span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">完了</span>`;
+                }
+
+                div.innerHTML = `<span class="truncate mr-2 w-42">${idx + 1}. ${data.name}</span> ${badge}`;
+                div.onclick = () => { currentIndex = idx; displayCurrent(); };
+                fileListContainer.appendChild(div);
+            });
+        }
+
+        function renderTable() {
+            tableBody.innerHTML = '';
+            filesData.forEach((data, idx) => {
+                const tr = document.createElement('tr');
+                tr.className = idx === currentIndex ? 'bg-blue-50' : (data.status === '計測完了' ? 'bg-green-50/30 hover:bg-gray-50' : 'hover:bg-gray-50');
+                tr.innerHTML = `
+                    <td class="p-2 border-r text-center text-gray-400 font-mono">${idx + 1}</td>
+                    <td class="p-2 border-r font-medium text-gray-800 truncate max-w-[120px]">${data.name}</td>
+                    <td class="p-2 border-r text-right font-mono text-green-700 font-bold">${data.twoAlpha ? data.twoAlpha + '°' : '-'}</td>
+                    <td class="p-2 border-r text-right font-mono text-blue-700">${data.alpha ? data.alpha + '°' : '-'}</td>
+                    <td class="p-2 text-right font-mono text-purple-700 font-semibold">${data.area ? data.area : '-'}</td>
+                `;
+                tableBody.appendChild(tr);
+            });
+        }
+
+        copyBtn.onclick = function() {
+            if(filesData.length === 0) return;
+            let outputText = "通し番号\tファイル名\t頂角 (2α) [°]\t半頂角 (α) [°]\t面積 [px²]\n";
+            filesData.forEach((data, idx) => {
+                outputText += `${idx + 1}\t${data.name}\t${data.twoAlpha || ""}\t${data.alpha || ""}\t${data.area || ""}\n`;
+            });
+
+            navigator.clipboard.writeText(outputText).then(() => {
+                toast.classList.remove('opacity-0'); toast.classList.add('opacity-100');
+                setTimeout(() => { toast.classList.remove('opacity-100'); toast.classList.add('opacity-0'); }, 2000);
+            });
+        };
+
+        prevBtn.onclick = () => { if(currentIndex > 0) { currentIndex--; displayCurrent(); } };
+        nextBtn.onclick = () => { if(currentIndex < filesData.length - 1) { currentIndex++; displayCurrent(); } };
+    </script>
+</body>
+</html>
