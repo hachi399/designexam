@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>【完全自動】大量画像 角度一括計測システム</title>
+    <title>【手動3点クリック】大量画像 角度一括計測システム</title>
     <script src="https://cdn.tailwindcss.com"></script>
 </head>
 <body class="bg-gray-50 min-h-screen text-gray-800">
@@ -12,8 +12,8 @@
         <!-- ヘッダー -->
         <header class="flex justify-between items-center border-b pb-3 mb-3 shrink-0">
             <div>
-                <h1 class="text-xl font-bold text-gray-900">【AI/画像認識】角度一括自動計測システム</h1>
-                <p class="text-xs text-gray-500">画像を読み込むだけで、頂点・左下・右下を自動検出し、角度を即座にエクセル形式で出力します。</p>
+                <h1 class="text-xl font-bold text-gray-900">角度一括手動計測システム</h1>
+                <p class="text-xs text-gray-500">画像上を「①頂点 ➔ ②左下 ➔ ③右下」の順に3点クリックするだけで、角度を即座にエクセル形式で出力します。</p>
             </div>
             <div class="text-right">
                 <div class="text-xs font-semibold text-gray-600 mb-1">全体の進捗: <span id="progressText">0 / 0</span></div>
@@ -34,15 +34,6 @@
                         <input type="file" id="upload" accept="image/*" multiple 
                             class="block w-full text-xs text-gray-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-blue-50 file:text-blue-700 hover:file:bg-blue-100 cursor-pointer">
                     </div>
-                    <!-- 輪郭抽出の感度設定 (顧客の現場環境に合わせるためのチューニング用) -->
-                    <div class="pt-2 border-t">
-                        <label class="block text-xs font-bold text-gray-700 mb-1 flex justify-between">
-                            <span>② 自動検出の感度 (しきい値)</span>
-                            <span id="thresholdVal" class="text-blue-600 font-mono">128</span>
-                        </label>
-                        <input type="range" id="threshold" min="1" max="254" value="128" class="w-full accent-blue-600">
-                        <span class="text-[10px] text-gray-400 block mt-0.5">※物体の境界線が綺麗に選ばれない場合はこれを左右に調整してください。</span>
-                    </div>
                 </div>
                 <div class="flex-1 overflow-y-auto p-2 space-y-1 bg-gray-50" id="fileList">
                     <div class="text-xs text-gray-400 text-center p-4">画像が読み込まれていません</div>
@@ -51,21 +42,21 @@
 
             <!-- 中央：メイン計測キャンバス -->
             <div class="flex-1 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col overflow-hidden relative" id="dropZone">
-                <div id="status" class="p-2.5 bg-green-600 text-white font-medium text-sm text-center shrink-0 shadow-sm">
-                    画像をドロップすると、すべての画像が全自動で即座に計算されます。
+                <div id="status" class="p-2.5 bg-blue-600 text-white font-medium text-sm text-center shrink-0 shadow-sm">
+                    画像を読み込み、キャンバス上を3点クリックしてください。
                 </div>
 
                 <div class="flex-1 overflow-auto flex justify-center items-center bg-gray-100 p-4 min-h-0 relative">
-                    <canvas id="canvas" class="max-w-full h-auto border border-gray-300 rounded shadow-md hidden"></canvas>
+                    <canvas id="canvas" class="max-w-full h-auto border border-gray-300 rounded shadow-md hidden cursor-crosshair"></canvas>
                     <div id="placeholder" class="text-gray-400 flex flex-col items-center justify-center pointer-events-none">
                         <svg class="w-16 h-16 mb-2 stroke-current" fill="none" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 002-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/></svg>
-                        <span class="text-sm font-semibold">画像ファイルをここにドロップ（全自動計測）</span>
+                        <span class="text-sm font-semibold">画像ファイルをここにドロップ</span>
                     </div>
                 </div>
 
-                <!-- 手動修正用の補助機能 -->
+                <!-- 補助機能 -->
                 <div class="p-2 border-t bg-gray-50 flex justify-between items-center shrink-0">
-                    <span class="text-[11px] text-gray-500">※自動認識がズレた場合は、画面をクリックして手動で上書き修正できます。</span>
+                    <span id="clickGuide" class="text-[11px] text-red-600 font-bold">画像を読み込んでください。</span>
                     <div class="flex gap-2">
                         <button id="prevBtn" class="bg-white border hover:bg-gray-100 text-gray-700 text-xs font-semibold py-1.5 px-3 rounded transition">◀ 前へ</button>
                         <button id="nextBtn" class="bg-white border hover:bg-gray-100 text-gray-700 text-xs font-semibold py-1.5 px-3 rounded transition">次へ ▶</button>
@@ -76,7 +67,7 @@
             <!-- 右サイド：リアルタイムエクセル用データ出力 -->
             <div class="w-96 bg-white rounded-xl shadow-sm border border-gray-200 flex flex-col shrink-0 overflow-hidden">
                 <div class="p-3 border-b bg-gray-50 flex justify-between items-center">
-                    <span class="text-xs font-bold text-gray-700">③ 計測データ出力 (Excel直貼用)</span>
+                    <span class="text-xs font-bold text-gray-700">② 計測データ出力 (Excel直貼用)</span>
                     <button id="copyBtn" class="bg-green-600 hover:bg-green-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition">
                         エクセル用コピー
                     </button>
@@ -118,21 +109,11 @@
         const progressBar = document.getElementById('progressBar');
         const progressText = document.getElementById('progressText');
         const toast = document.getElementById('toast');
-        const thresholdInput = document.getElementById('threshold');
-        const thresholdVal = document.getElementById('thresholdVal');
+        const clickGuide = document.getElementById('clickGuide');
 
         let filesData = []; 
         let currentIndex = -1;
         let loadedImage = null;
-
-        thresholdInput.oninput = function() {
-            thresholdVal.innerText = this.value;
-            if (currentIndex !== -1 && filesData[currentIndex].isAuto) {
-                autoDetectPoints(currentIndex);
-                redraw();
-                renderTable();
-            }
-        };
 
         dropZone.addEventListener('dragover', (e) => { e.preventDefault(); dropZone.classList.add('bg-blue-50'); });
         dropZone.addEventListener('dragleave', () => { dropZone.classList.remove('bg-blue-50'); });
@@ -147,7 +128,6 @@
 
         function handleFiles(files) {
             filesData = [];
-            let loadedCount = 0;
             const targetFiles = Array.from(files).filter(f => f.type.startsWith('image/'));
 
             if (targetFiles.length === 0) return;
@@ -160,85 +140,16 @@
                     points: [],
                     twoAlpha: null,
                     alpha: null,
-                    status: '未計測',
-                    isAuto: true // 自動計測フラグ
+                    status: '未計測'
                 };
                 filesData.push(dataStructure);
-
-                // 全自動処理のため、バックグラウンドで一時的に画像を読み込んで解析する
-                const img = new Image();
-                img.onload = function() {
-                    analyzeImageBackground(img, index);
-                    loadedCount++;
-                    
-                    // 全ての画像解析が終わるか、最初の1枚が読み込まれたら画面を更新
-                    if (loadedCount === 1 || loadedCount === targetFiles.length) {
-                        if (currentIndex === -1) {
-                            currentIndex = 0;
-                            displayCurrent();
-                        }
-                        renderFileList();
-                        renderTable();
-                        updateProgress();
-                    }
-                };
-                img.src = URL.createObjectURL(file);
             });
-        }
 
-        // バックグラウンドで画像ピクセルを解析して3点を自動検出
-        function analyzeImageBackground(img, index) {
-            const tempCanvas = document.createElement('canvas');
-            const tempCtx = tempCanvas.getContext('2d');
-            tempCanvas.width = img.width;
-            tempCanvas.height = img.height;
-            tempCtx.drawImage(img, 0, 0);
-
-            const imgData = tempCtx.getImageData(0, 0, tempCanvas.width, tempCanvas.height);
-            const pixels = imgData.data;
-            const thresh = parseInt(thresholdInput.value);
-
-            let topPt = { x: 0, y: tempCanvas.height };   // Yが最小(一番上)
-            let leftPt = { x: tempCanvas.width, y: 0 };  // Xが最小(一番左)
-            let rightPt = { x: 0, y: 0 };                 // Xが最大(一番右)
-
-            let found = false;
-
-            // 全ピクセルをスキャン
-            for (let y = 0; y < tempCanvas.height; y++) {
-                for (let x = 0; x < tempCanvas.width; x++) {
-                    const idx = (y * tempCanvas.width + x) * 4;
-                    const r = pixels[idx];
-                    const g = pixels[idx+1];
-                    const b = pixels[idx+2];
-                    
-                    // 輝度（明るさ）を計算
-                    const brightness = 0.299 * r + 0.587 * g + 0.114 * b;
-
-                    // しきい値より暗い部分を対象物体とする (背景が白、ターゲットが黒/濃い色を想定)
-                    // ※もし背景が黒でターゲットが白なら `brightness > thresh` に反転させてください
-                    if (brightness < thresh) {
-                        found = true;
-                        // 頂点の更新 (Yが最も小さい＝上)
-                        if (y < topPt.y) { topPt.x = x; topPt.y = y; }
-                        // 左下の更新 (Xが最も小さい＝左)
-                        if (x < leftPt.x) { leftPt.x = x; leftPt.y = y; }
-                        // 右下の更新 (Xが最も大きい＝右)
-                        if (x > rightPt.x) { rightPt.x = x; rightPt.y = y; }
-                    }
-                }
-            }
-
-            if (found) {
-                filesData[index].points = [topPt, leftPt, rightPt];
-                calculateAngleForData(filesData[index]);
-            }
-        }
-
-        // 選択画像のアクティブ化
-        function autoDetectPoints(index) {
-            if (!loadedImage) return;
-            analyzeImageBackground(loadedImage, index);
+            currentIndex = 0;
+            displayCurrent();
+            renderFileList();
+            renderTable();
+            updateProgress();
         }
 
         function displayCurrent() {
@@ -253,23 +164,39 @@
                 canvas.classList.remove('hidden');
                 placeholder.classList.add('hidden');
                 
-                // 表示された段階で自動計測がまだなら実行
-                if (currentData.points.length === 0) {
-                    autoDetectPoints(currentIndex);
-                }
-
                 document.querySelectorAll('.file-item').forEach((el, i) => {
                     if(i === currentIndex) el.classList.add('bg-blue-100', 'border-blue-300');
                     else el.classList.remove('bg-blue-100', 'border-blue-300');
                 });
 
+                status.innerText = `【現在選択中】 ${currentData.name}`;
+                updateGuide();
                 redraw();
                 updateProgress();
             };
             img.src = URL.createObjectURL(currentData.file);
         }
 
-        // 角度計算共通ロジック
+        // ガイドメッセージの更新
+        function updateGuide() {
+            if (currentIndex === -1) return;
+            const data = filesData[currentIndex];
+            if (data.points.length === 0) {
+                clickGuide.innerText = "➔ 【1点目】 頂点 をクリックしてください";
+                clickGuide.className = "text-[11px] text-blue-600 font-bold";
+            } else if (data.points.length === 1) {
+                clickGuide.innerText = "➔ 【2点目】 左下 をクリックしてください";
+                clickGuide.className = "text-[11px] text-orange-600 font-bold";
+            } else if (data.points.length === 2) {
+                clickGuide.innerText = "➔ 【3点目】 右下 をクリックしてください";
+                clickGuide.className = "text-[11px] text-red-600 font-bold";
+            } else {
+                clickGuide.innerText = "✓ 計測完了 （クリックで再度最初から打ち直せます）";
+                clickGuide.className = "text-[11px] text-green-600 font-bold";
+            }
+        }
+
+        // 角度計算ロジック
         function calculateAngleForData(data) {
             if (data.points.length !== 3) return;
             const p0 = data.points[0];
@@ -300,40 +227,42 @@
 
             const data = filesData[currentIndex];
             const labels = ["頂点", "左下", "右下"];
+            const colors = ["#3B82F6", "#F97316", "#EF4444"]; // 青、オレンジ、赤
 
             data.points.forEach((pt, idx) => {
-                ctx.fillStyle = data.isAuto ? "#3B82F6" : "#EF4444"; // 自動は青、手動修正は赤
+                ctx.fillStyle = colors[idx];
                 ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI * 2); ctx.fill();
                 ctx.strokeStyle = "white"; ctx.lineWidth = 2; ctx.stroke();
 
                 ctx.fillStyle = "black"; ctx.font = "bold 16px sans-serif";
                 ctx.shadowColor = "white"; ctx.shadowBlur = 4;
-                ctx.fillText(`${idx + 1}:${labels[idx]} (${data.isAuto ? '自動':'手動'})`, pt.x + 10, pt.y - 10);
+                ctx.fillText(`${idx + 1}:${labels[idx]}`, pt.x + 10, pt.y - 10);
                 ctx.shadowBlur = 0;
             });
 
-            if (data.points.length === 3) {
+            // 線の描画（2点以上あれば順に引く、3点揃えばV字になる）
+            if (data.points.length >= 2) {
                 ctx.strokeStyle = "#F59E0B"; ctx.lineWidth = 3; ctx.setLineDash([4, 4]);
-                ctx.beginPath(); ctx.moveTo(data.points[0].x, data.points[0].y); ctx.lineTo(data.points[1].x, data.points[1].y); ctx.stroke();
-                ctx.beginPath(); ctx.moveTo(data.points[0].x, data.points[0].y); ctx.lineTo(data.points[2].x, data.points[2].y); ctx.stroke();
-                ctx.setLineDash([]);
+                ctx.beginPath(); 
+                ctx.moveTo(data.points[0].x, data.points[0].y); 
+                ctx.lineTo(data.points[1].x, data.points[1].y); 
+                ctx.stroke();
             }
+            if (data.points.length === 3) {
+                ctx.beginPath(); 
+                ctx.moveTo(data.points[0].x, data.points[0].y); 
+                ctx.lineTo(data.points[2].x, data.points[2].y); 
+                ctx.stroke();
+            }
+            ctx.setLineDash([]);
         }
 
-        // 自動がズレていた場合の手動上書き修正機能
+        // 完全手動クリック処理
         canvas.onclick = function(e) {
             if (!loadedImage || currentIndex === -1) return;
             const data = filesData[currentIndex];
 
-            // 手動モードに切り替え
-            if (data.isAuto) {
-                data.points = [];
-                data.isAuto = false;
-                data.twoAlpha = null;
-                data.alpha = null;
-                data.status = '未計測';
-            }
-
+            // すでに3点計測済みの場合は、再クリックでリセットして最初から打ち直し
             if (data.points.length >= 3) {
                 data.points = [];
                 data.twoAlpha = null;
@@ -348,14 +277,19 @@
             const y = (e.clientY - rect.top) * scaleY;
 
             data.points.push({x, y});
-            redraw();
-
+            
             if (data.points.length === 3) {
                 calculateAngleForData(data);
                 renderTable();
                 renderFileList();
                 updateProgress();
+                
+                // 3点目を押し終わったら自動で1秒後に次の画像に進むとより快適になるため、お好みで設定可能です。
+                // 今回は勝手に進むと確認しづらいため止めています。
             }
+
+            updateGuide();
+            redraw();
         };
 
         function renderFileList() {
@@ -364,11 +298,9 @@
                 const div = document.createElement('div');
                 div.className = `file-item p-2 text-xs border rounded cursor-pointer transition flex justify-between items-center bg-white ${idx === currentIndex ? 'bg-blue-100 border-blue-300' : 'hover:bg-gray-100'}`;
                 
-                let badge = `<span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">自動完了</span>`;
-                if(!data.isAuto && data.status === '計測完了') {
-                    badge = `<span class="text-[10px] bg-orange-100 text-orange-700 px-1.5 py-0.5 rounded font-bold">手動修正</span>`;
-                } else if (data.status === '未計測') {
-                    badge = `<span class="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">失敗</span>`;
+                let badge = `<span class="text-[10px] bg-gray-200 text-gray-600 px-1.5 py-0.5 rounded">未計測</span>`;
+                if(data.status === '計測完了') {
+                    badge = `<span class="text-[10px] bg-green-100 text-green-700 px-1.5 py-0.5 rounded font-bold">完了</span>`;
                 }
 
                 div.innerHTML = `<span class="truncate mr-2 w-42">${idx + 1}. ${data.name}</span> ${badge}`;
@@ -394,9 +326,9 @@
 
         copyBtn.onclick = function() {
             if(filesData.length === 0) return;
-            let outputText = "通し番号\tファイル名\t頂角 (2α) [°]\t半頂角 (α) [°]\t計測方式\n";
+            let outputText = "通し番号\tファイル名\t頂角 (2α) [°]\t半頂角 (α) [°]\n";
             filesData.forEach((data, idx) => {
-                outputText += `${idx + 1}\t${data.name}\t${data.twoAlpha || ""}\t${data.alpha || ""}\t${data.isAuto ? '自動':'手動修正'}\n`;
+                outputText += `${idx + 1}\t${data.name}\t${data.twoAlpha || ""}\t${data.alpha || ""}\n`;
             });
 
             navigator.clipboard.writeText(outputText).then(() => {
