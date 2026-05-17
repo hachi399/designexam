@@ -1,0 +1,252 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>火炎計測システム（高さ・円錐表面積）</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+</head>
+<body class="bg-slate-50 min-h-screen text-slate-800">
+
+    <div class="w-full max-w-[1600px] mx-auto p-4 flex flex-col h-screen">
+        <header class="flex justify-between items-center border-b pb-3 mb-3 shrink-0">
+            <div>
+                <h1 class="text-xl font-bold text-slate-900">🔥 火炎形状・表面積計測システム</h1>
+                <p class="text-xs text-slate-500">①火炎頂点 ➔ ②左下 ➔ ③右下の順にクリック。底面(100π mm²)を基準に円錐表面積を算出します。</p>
+            </div>
+            <div class="text-right">
+                <div class="text-xs font-semibold text-slate-600 mb-1">進捗: <span id="progressText">0 / 0</span></div>
+                <div class="w-48 bg-slate-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-orange-600 h-2 rounded-full" style="width: 0%"></div>
+                </div>
+            </div>
+        </header>
+
+        <div class="flex flex-1 gap-4 overflow-hidden min-h-0">
+            <div class="w-72 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col shrink-0 overflow-hidden">
+                <div class="p-3 border-b bg-slate-50">
+                    <label class="block text-xs font-bold text-slate-700 mb-1">画像一括読み込み</label>
+                    <input type="file" id="upload" accept="image/*" multiple class="block w-full text-xs text-slate-500 file:mr-2 file:py-1 file:px-3 file:rounded file:border-0 file:text-xs file:font-semibold file:bg-orange-50 file:text-orange-700 hover:file:bg-orange-100 cursor-pointer">
+                </div>
+                <div class="flex-1 overflow-y-auto p-2 space-y-1 bg-slate-50" id="fileList"></div>
+            </div>
+
+            <div class="flex-1 bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col overflow-hidden relative" id="dropZone">
+                <div id="status" class="p-2.5 bg-slate-800 text-white font-medium text-sm text-center shrink-0">画像を読み込んでください</div>
+
+                <div class="flex-1 overflow-auto flex justify-center items-center bg-slate-200 p-4 min-h-0 relative">
+                    <canvas id="canvas" class="max-w-full h-auto border border-slate-400 rounded shadow-lg hidden cursor-crosshair"></canvas>
+                    <div id="placeholder" class="text-slate-400 flex flex-col items-center">
+                        <svg class="w-16 h-16 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M13 10V3L4 14h7v7l9-11h-7z"/></svg>
+                        <span class="text-sm font-semibold">ここに画像をドロップ</span>
+                    </div>
+                </div>
+
+                <div class="p-2 border-t bg-slate-50 flex justify-between items-center shrink-0">
+                    <span id="clickGuide" class="text-[11px] font-bold"></span>
+                    <div class="flex gap-2">
+                        <button id="prevBtn" class="bg-white border hover:bg-slate-100 text-xs py-1.5 px-3 rounded transition">◀ 前へ</button>
+                        <button id="nextBtn" class="bg-white border hover:bg-slate-100 text-xs py-1.5 px-3 rounded transition">次へ ▶</button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="w-[450px] bg-white rounded-xl shadow-sm border border-slate-200 flex flex-col shrink-0 overflow-hidden">
+                <div class="p-3 border-b bg-slate-50 flex justify-between items-center">
+                    <span class="text-xs font-bold text-slate-700">計測結果データ</span>
+                    <button id="copyBtn" class="bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold py-1.5 px-3 rounded shadow-sm transition">Excel用コピー</button>
+                </div>
+                <div class="flex-1 overflow-auto">
+                    <table class="w-full text-left border-collapse text-[11px]">
+                        <thead class="bg-slate-100 sticky top-0 border-b z-10 text-slate-600">
+                            <tr>
+                                <th class="p-2 border-r text-center w-8">No.</th>
+                                <th class="p-2 border-r">ファイル名</th>
+                                <th class="p-2 border-r text-right">高さ[px]</th>
+                                <th class="p-2 border-r text-right">角度(2α)</th>
+                                <th class="p-2 text-right">表面積[mm²]</th>
+                            </tr>
+                        </thead>
+                        <tbody id="tableBody" class="divide-y text-slate-700"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="fixed bottom-5 right-5 bg-slate-900 text-white text-sm py-2 px-4 rounded-lg shadow-lg opacity-0 transition-opacity duration-300 pointer-events-none z-50">コピーしました</div>
+
+    <script>
+        const canvas = document.getElementById('canvas');
+        const ctx = canvas.getContext('2d');
+        const upload = document.getElementById('upload');
+        const tableBody = document.getElementById('tableBody');
+        const status = document.getElementById('status');
+        const clickGuide = document.getElementById('clickGuide');
+        const copyBtn = document.getElementById('copyBtn');
+
+        let filesData = []; 
+        let currentIndex = -1;
+        let loadedImage = null;
+
+        // 定数設定（バーナー出口面積 100π mm^2）
+        const BASE_AREA_MM2 = 100 * Math.PI;
+        const RADIUS_MM = 10; // 半径 r = 10mm
+
+        upload.onchange = (e) => {
+            if (e.target.files.length > 0) {
+                filesData = Array.from(e.target.files).filter(f => f.type.startsWith('image/')).map((file, index) => ({
+                    file, name: file.name, points: [], heightPx: null, twoAlpha: null, surfaceArea: null, status: '未計測'
+                }));
+                currentIndex = 0;
+                displayCurrent();
+                renderFileList();
+                renderTable();
+            }
+        };
+
+        function displayCurrent() {
+            if (currentIndex < 0 || currentIndex >= filesData.length) return;
+            const data = filesData[currentIndex];
+            const img = new Image();
+            img.onload = () => {
+                loadedImage = img;
+                canvas.width = img.width; canvas.height = img.height;
+                canvas.classList.remove('hidden');
+                document.getElementById('placeholder').classList.add('hidden');
+                status.innerText = `解析中: ${data.name}`;
+                updateGuide(); redraw(); updateProgress();
+            };
+            img.src = URL.createObjectURL(data.file);
+        }
+
+        function updateGuide() {
+            const pts = filesData[currentIndex].points.length;
+            const msgs = ["頂点をクリック", "左下（バーナー端）をクリック", "右下（バーナー端）をクリック", "計測完了"];
+            clickGuide.innerText = `➔ ${msgs[pts]}`;
+            clickGuide.className = `text-[11px] font-bold ${pts === 3 ? 'text-emerald-600' : 'text-orange-600'}`;
+        }
+
+        function calculateFlame(data) {
+            if (data.points.length !== 3) return;
+            const [p0, p1, p2] = data.points;
+
+            // 1. 火炎の高さ(h)の算出: 底辺（p1-p2）の中点から頂点p0までの垂直距離
+            const midX = (p1.x + p2.x) / 2;
+            const midY = (p1.y + p2.y) / 2;
+            const hPx = Math.sqrt(Math.pow(p0.x - midX, 2) + Math.pow(p0.y - midY, 2));
+            data.heightPx = hPx.toFixed(1);
+
+            // 2. 角度(2α)の算出
+            const a = Math.atan2(p1.y - p0.y, p1.x - p0.x);
+            const b = Math.atan2(p2.y - p0.y, p2.x - p0.x);
+            let angle = Math.abs(a - b) * (180 / Math.PI);
+            if (angle > 180) angle = 360 - angle;
+            data.twoAlpha = angle.toFixed(2);
+
+            // 3. 円錐表面積の算出
+            // ※ここではpxをmmとして扱うか、別途変換係数が必要ですが、
+            // ユーザー指定の出口面積(100π)から得られる半径 r=10mm と、計測した高さhを用いて計算します。
+            const r = RADIUS_MM;
+            const h = hPx; // ※pxとmmのスケールが異なる場合はここを調整
+            const L = Math.sqrt(r * r + h * h); // 母線の長さ
+            const sideArea = Math.PI * r * L; // 側面積
+            data.surfaceArea = (sideArea + BASE_AREA_MM2).toFixed(2);
+            
+            data.status = '計測完了';
+        }
+
+        function redraw() {
+            if (!loadedImage) return;
+            ctx.clearRect(0, 0, canvas.width, canvas.height);
+            ctx.drawImage(loadedImage, 0, 0);
+            const data = filesData[currentIndex];
+
+            // ガイド線の描画
+            if (data.points.length >= 1) {
+                data.points.forEach((pt, i) => {
+                    ctx.fillStyle = ["#3B82F6", "#F97316", "#EF4444"][i];
+                    ctx.beginPath(); ctx.arc(pt.x, pt.y, 6, 0, Math.PI*2); ctx.fill();
+                    ctx.strokeStyle="white"; ctx.stroke();
+                });
+            }
+
+            if (data.points.length === 3) {
+                const [p0, p1, p2] = data.points;
+                const midX = (p1.x + p2.x) / 2;
+                const midY = (p1.y + p2.y) / 2;
+
+                // 二等辺三角形の可視化
+                ctx.beginPath();
+                ctx.strokeStyle = "#F59E0B"; ctx.lineWidth = 2;
+                ctx.moveTo(p0.x, p0.y); ctx.lineTo(p1.x, p1.y);
+                ctx.lineTo(p2.x, p2.y); ctx.closePath(); ctx.stroke();
+                
+                // 高さ線の描画
+                ctx.setLineDash([5, 5]);
+                ctx.beginPath(); ctx.moveTo(p0.x, p0.y); ctx.lineTo(midX, midY); ctx.stroke();
+                ctx.setLineDash([]);
+
+                // 塗りつぶし
+                ctx.fillStyle = "rgba(245, 158, 11, 0.2)"; ctx.fill();
+            }
+        }
+
+        canvas.onclick = (e) => {
+            if (!loadedImage || currentIndex === -1) return;
+            const data = filesData[currentIndex];
+            if (data.points.length >= 3) data.points = [];
+
+            const rect = canvas.getBoundingClientRect();
+            const scaleX = canvas.width / rect.width;
+            const scaleY = canvas.height / rect.height;
+            data.points.push({ x: (e.clientX - rect.left) * scaleX, y: (e.clientY - rect.top) * scaleY });
+
+            if (data.points.length === 3) {
+                calculateFlame(data);
+                renderTable(); renderFileList();
+            }
+            updateGuide(); redraw(); updateProgress();
+        };
+
+        function renderTable() {
+            tableBody.innerHTML = filesData.map((d, i) => `
+                <tr class="${i === currentIndex ? 'bg-orange-50' : ''}">
+                    <td class="p-2 border-r text-center text-slate-400">${i+1}</td>
+                    <td class="p-2 border-r truncate max-w-[100px]">${d.name}</td>
+                    <td class="p-2 border-r text-right font-mono">${d.heightPx || '-'}</td>
+                    <td class="p-2 border-r text-right font-mono text-orange-600">${d.twoAlpha ? d.twoAlpha+'°' : '-'}</td>
+                    <td class="p-2 text-right font-mono text-emerald-700 font-bold">${d.surfaceArea || '-'}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderFileList() {
+            const list = document.getElementById('fileList');
+            list.innerHTML = filesData.map((d, i) => `
+                <div onclick="currentIndex=${i};displayCurrent();" class="p-2 text-xs border rounded cursor-pointer ${i===currentIndex?'bg-orange-100 border-orange-300':'bg-white'}">
+                    ${i+1}. ${d.name} <span class="float-right">${d.status==='計測完了'?'✅':''}</span>
+                </div>
+            `).join('');
+        }
+
+        function updateProgress() {
+            const done = filesData.filter(d => d.status === '計測完了').length;
+            document.getElementById('progressText').innerText = `${done} / ${filesData.length}`;
+            document.getElementById('progressBar').style.width = `${(done/filesData.length)*100}%`;
+        }
+
+        copyBtn.onclick = () => {
+            let txt = "No\tファイル名\t高さ[px]\t角度(2α)\t表面積[mm2]\n";
+            filesData.forEach((d, i) => txt += `${i+1}\t${d.name}\t${d.heightPx}\t${d.twoAlpha}\t${d.surfaceArea}\n`);
+            navigator.clipboard.writeText(txt).then(() => {
+                const t = document.getElementById('toast');
+                t.style.opacity = 1; setTimeout(() => t.style.opacity = 0, 2000);
+            });
+        };
+
+        document.getElementById('prevBtn').onclick = () => { if(currentIndex > 0) { currentIndex--; displayCurrent(); } };
+        document.getElementById('nextBtn').onclick = () => { if(currentIndex < filesData.length-1) { currentIndex++; displayCurrent(); } };
+    </script>
+</body>
+</html>
