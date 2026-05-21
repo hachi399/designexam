@@ -12,7 +12,7 @@
         <header class="flex justify-between items-center border-b pb-3 mb-3 shrink-0">
             <div>
                 <h1 class="text-xl font-bold text-slate-900">🔥 火炎実寸計測システム</h1>
-                <p class="text-xs text-slate-500">底辺（バーナー出口）を20mmとして、画像から実際の高さと表面積を逆算します。</p>
+                <p class="text-xs text-slate-500">底辺（バーナー出口）を20mmとして、画像から実際の高さと円錐側面積を逆算します。</p>
             </div>
             <div class="text-right">
                 <div class="text-xs font-semibold text-slate-600 mb-1">進捗: <span id="progressText">0 / 0</span></div>
@@ -59,7 +59,7 @@
                                 <th class="p-2 border-r">ファイル名</th>
                                 <th class="p-2 border-r text-right">高さ[mm]</th>
                                 <th class="p-2 border-r text-right">角度(2α)</th>
-                                <th class="p-2 text-right">表面積[mm²]</th>
+                                <th class="p-2 text-right">円錐側面積[mm²]</th>
                             </tr>
                         </thead>
                         <tbody id="tableBody" class="divide-y text-slate-700"></tbody>
@@ -84,7 +84,7 @@
         // 定数設定
         const KNOWN_BASE_MM = 20; // バーナー出口直径 20mm
         const RADIUS_MM = 10;     // 半径 10mm
-        const BASE_AREA_MM2 = 100 * Math.PI; // 底面積 100π
+        
 
         upload.onchange = (e) => {
             if (e.target.files.length > 0) {
@@ -126,7 +126,7 @@
             const r = RADIUS_MM;
             const L = Math.sqrt(r * r + hMm * hMm);
             const sideArea = Math.PI * r * L;
-            data.surfaceArea = (sideArea + BASE_AREA_MM2).toFixed(2);
+            data.surfaceArea = sideArea.toFixed(2);
             
             data.status = '計測完了';
         }
